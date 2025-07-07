@@ -5,6 +5,7 @@
   <title>Diário de Bordo - RioFly Aviation</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet" />
   <style>
+    /* ... seu CSS permanece igual ... */
     * {
       margin: 0;
       padding: 0;
@@ -75,28 +76,12 @@
     th {
       background-color: #f4f4f4;
     }
-    .btn-apagar {
-      background-color: #cc3300;
-      border: none;
-      padding: 0.5rem 1rem;
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    .btn-apagar:hover {
-      background-color: #991f00;
-    }
     @media (max-width: 600px) {
       main {
         margin: 1rem;
         padding: 1rem;
       }
       table {
-        font-size: 0.85rem;
-      }
-      .btn-apagar {
-        padding: 0.3rem 0.6rem;
         font-size: 0.85rem;
       }
     }
@@ -161,7 +146,6 @@
           <th>Custos (R$)</th>
           <th>Lucro (R$)</th>
           <th>Observações</th>
-          <th>Ações</th>
         </tr>
       </thead>
       <tbody id="historicoTabela">
@@ -172,7 +156,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+    import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyD7SE9XR48nqXKS_vvmk6c4cJ9ITJAumko",
@@ -214,21 +198,8 @@
           <td>R$ ${voo.custos.toLocaleString("pt-BR")}</td>
           <td>R$ ${voo.lucro.toLocaleString("pt-BR")}</td>
           <td>${voo.observacoes}</td>
-          <td><button class="btn-apagar" data-id="${id}">Apagar</button></td>
         `;
         historicoTabela.appendChild(tr);
-      });
-
-      // Eventos para apagar voos
-      document.querySelectorAll(".btn-apagar").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const id = e.target.getAttribute("data-id");
-          if (confirm("Tem certeza que deseja apagar este voo?")) {
-            remove(ref(db, `diario_bordo/${id}`))
-              .then(() => alert("Voo apagado com sucesso!"))
-              .catch(err => alert("Erro ao apagar voo: " + err.message));
-          }
-        });
       });
     }
 
