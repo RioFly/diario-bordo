@@ -21,6 +21,10 @@
       padding: 2rem;
       text-align: center;
     }
+    /* Tornar o título invisível mas mantendo o espaço */
+    header h1 {
+      visibility: hidden;
+    }
     main {
       max-width: 800px;
       margin: 2rem auto;
@@ -61,10 +65,38 @@
     button:hover {
       background-color: #004c99;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 2rem;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.75rem;
+      text-align: left;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    .btn-apagar {
+      background-color: #cc3300;
+      border: none;
+      padding: 0.5rem 1rem;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .btn-apagar:hover {
+      background-color: #991f00;
+    }
     @media (max-width: 600px) {
       main {
         margin: 1rem;
         padding: 1rem;
+      }
+      table {
+        font-size: 0.85rem;
       }
     }
   </style>
@@ -78,7 +110,7 @@
   <main>
     <h2>Registrar Voo</h2>
     <form id="diarioBordoForm">
-      <label for="comandante">Comandante:</label>
+      <label for="comandante">Nome:</label>
       <input type="text" id="comandante" required placeholder="Nome completo" />
 
       <label for="vid">VID:</label>
@@ -89,7 +121,7 @@
 
       <label for="aeronave">Aeronave:</label>
       <select id="aeronave" required>
-        <option value="">Selecione...</option>
+        <option value="">-- Selecione uma aeronave --</option>
         <option value="Phenom 300">Phenom 300</option>
         <option value="Phenom 100">Phenom 100</option>
         <option value="Citation CJ3">Citation CJ3</option>
@@ -114,12 +146,32 @@
 
       <button type="submit">Enviar Voo</button>
     </form>
+
+    <h2>Histórico de Voos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Nome (VID)</th>
+          <th>Aeronave</th>
+          <th>Rota</th>
+          <th>Milhas (NM)</th>
+          <th>Receita (R$)</th>
+          <th>Custos (R$)</th>
+          <th>Lucro (R$)</th>
+          <th>Observações</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="historicoTabela">
+        <!-- Voos carregados aqui -->
+      </tbody>
+    </table>
   </main>
 
-  <!-- Firebase SDKs -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getDatabase, ref, push, get, child, update } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+    import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyD7SE9XR48nqXKS_vvmk6c4cJ9ITJAumko",
@@ -132,24 +184,82 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const database = getDatabase(app);
+    const db = getDatabase(app);
+    const diarioRef = ref(db, "diario_bordo");
 
-    document.getElementById('diarioBordoForm').addEventListener('submit', function(e) {
+    const form = document.getElementById("diarioBordoForm");
+    const historicoTabela = document.getElementById("historicoTabela");
+
+    let voosAtuais = {};
+
+    function renderizarHistorico(voos, filtroAeronave = "") {
+      historicoTabela.innerHTML = "";
+      if (!voos) return;
+
+      if (!filtroAeronave) return; // não mostra nada sem aeronave selecionada
+
+      Object.entries(voos).forEach(([id, voo]) => {
+        if (voo.aeronave !== filtroAeronave) return;
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${voo.data}</td>
+          <td>${voo.comandante} (${voo.vid})</td>
+          <td>${voo.aeronave}</td>
+          <td>${voo.rota}</td>
+          <td>${voo.milhas}</td>
+          <td>R$ ${voo.receita.toLocaleString("pt-BR")}</td>
+          <td>R$ ${voo.custos.toLocaleString("pt-BR")}</td>
+          <td>R$ ${voo.lucro.toLocaleString("pt-BR")}</td>
+          <td>${voo.observacoes}</td>
+          <td><button class="btn-apagar" data-id="${id}">Apagar</button></td>
+        `;
+        historicoTabela.appendChild(tr);
+      });
+
+      // Adicionar eventos para apagar voos
+      document.querySelectorAll(".btn-apagar").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.target.getAttribute("data-id");
+          if (confirm("Tem certeza que deseja apagar este voo?")) {
+            remove(ref(db, `diario_bordo/${id}`))
+              .then(() => alert("Voo apagado com sucesso!"))
+              .catch(err => alert("Erro ao apagar voo: " + err.message));
+          }
+        });
+      });
+    }
+
+    onValue(diarioRef, (snapshot) => {
+      voosAtuais = snapshot.val();
+      renderizarHistorico(voosAtuais, form.aeronave.value);
+    });
+
+    form.aeronave.addEventListener("change", () => {
+      renderizarHistorico(voosAtuais, form.aeronave.value);
+    });
+
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
 
-      const comandante = document.getElementById('comandante').value.trim();
-      const vid = document.getElementById('vid').value.trim();
-      const data = document.getElementById('data').value;
-      const aeronave = document.getElementById('aeronave').value;
-      const rota = document.getElementById('rota').value.trim();
-      const milhas = parseFloat(document.getElementById('milhas').value);
-      const custos = parseFloat(document.getElementById('custos').value);
-      const observacoes = document.getElementById('observacoes').value.trim();
+      const comandante = form.comandante.value.trim();
+      const vid = form.vid.value.trim();
+      const data = form.data.value;
+      const aeronave = form.aeronave.value;
+      const rota = form.rota.value.trim();
+      const milhas = parseFloat(form.milhas.value);
+      const custos = parseFloat(form.custos.value);
+      const observacoes = form.observacoes.value.trim();
+
+      if (!comandante || !vid || !data || !aeronave || !rota || isNaN(milhas) || isNaN(custos)) {
+        alert("Preencha todos os campos corretamente.");
+        return;
+      }
 
       const receita = milhas * 100;
       const lucro = receita - custos;
 
-      const voo = {
+      const novoVoo = {
         comandante,
         vid,
         data,
@@ -163,34 +273,12 @@
         timestamp: Date.now()
       };
 
-      const dbRef = ref(database);
-      push(ref(database, 'diario_bordo'), voo)
+      push(diarioRef, novoVoo)
         .then(() => {
-          return get(child(dbRef, 'banco/saldo'));
+          alert("Voo registrado com sucesso!");
+          form.reset();
         })
-        .then(snapshot => {
-          const saldoAtual = snapshot.exists() ? snapshot.val() : 5000000;
-          const novoSaldo = saldoAtual + lucro;
-          return update(ref(database, 'banco'), { saldo: novoSaldo });
-        })
-        .then(() => {
-          alert(
-            `Voo registrado com sucesso!\n\n` +
-            `Comandante: ${comandante} (VID ${vid})\n` +
-            `Data: ${data}\n` +
-            `Aeronave: ${aeronave}\n` +
-            `Rota: ${rota}\n` +
-            `Milhas: ${milhas} NM\n` +
-            `Receita: R$ ${receita.toLocaleString('pt-BR')}\n` +
-            `Custos: R$ ${custos.toLocaleString('pt-BR')}\n` +
-            `Lucro: R$ ${lucro.toLocaleString('pt-BR')}\n\n` +
-            `Saldo bancário atualizado!`
-          );
-          document.getElementById('diarioBordoForm').reset();
-        })
-        .catch(error => {
-          alert('Erro ao salvar os dados: ' + error.message);
-        });
+        .catch(err => alert("Erro ao registrar voo: " + err.message));
     });
   </script>
 </body>
