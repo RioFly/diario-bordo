@@ -21,10 +21,6 @@
       padding: 2rem;
       text-align: center;
     }
-    /* Tornar o título invisível mas mantendo o espaço */
-    header h1 {
-      visibility: hidden;
-    }
     main {
       max-width: 800px;
       margin: 2rem auto;
@@ -65,6 +61,7 @@
     button:hover {
       background-color: #004c99;
     }
+    /* Estilo para tabela de histórico */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -196,7 +193,8 @@
       historicoTabela.innerHTML = "";
       if (!voos) return;
 
-      if (!filtroAeronave) return; // não mostra nada sem aeronave selecionada
+      // Só mostra se filtro preenchido (aeronave selecionada)
+      if (!filtroAeronave) return;
 
       Object.entries(voos).forEach(([id, voo]) => {
         if (voo.aeronave !== filtroAeronave) return;
@@ -217,7 +215,7 @@
         historicoTabela.appendChild(tr);
       });
 
-      // Adicionar eventos para apagar voos
+      // Eventos para apagar voos
       document.querySelectorAll(".btn-apagar").forEach(btn => {
         btn.addEventListener("click", (e) => {
           const id = e.target.getAttribute("data-id");
