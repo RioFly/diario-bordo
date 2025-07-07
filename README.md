@@ -75,18 +75,6 @@
     th {
       background-color: #f4f4f4;
     }
-    .btn-apagar {
-      background-color: #cc3300;
-      border: none;
-      padding: 0.5rem 1rem;
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    .btn-apagar:hover {
-      background-color: #991f00;
-    }
     @media (max-width: 600px) {
       main {
         margin: 1rem;
@@ -157,7 +145,6 @@
           <th>Custos (R$)</th>
           <th>Lucro (R$)</th>
           <th>Observações</th>
-          <th>Ações</th>
         </tr>
       </thead>
       <tbody id="historicoTabela">
@@ -210,21 +197,8 @@
           <td>R$ ${voo.custos.toLocaleString("pt-BR")}</td>
           <td>R$ ${voo.lucro.toLocaleString("pt-BR")}</td>
           <td>${voo.observacoes}</td>
-          <td><button class="btn-apagar" data-id="${id}">Apagar</button></td>
         `;
         historicoTabela.appendChild(tr);
-      });
-
-      // Eventos para apagar voos
-      document.querySelectorAll(".btn-apagar").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const id = e.target.getAttribute("data-id");
-          if (confirm("Tem certeza que deseja apagar este voo?")) {
-            remove(ref(db, `diario_bordo/${id}`))
-              .then(() => alert("Voo apagado com sucesso!"))
-              .catch(err => alert("Erro ao apagar voo: " + err.message));
-          }
-        });
       });
     }
 
