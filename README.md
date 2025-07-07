@@ -117,24 +117,22 @@
   </main>
 
   <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getDatabase, ref, push, get, child, update } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
-  <script>
-    // Configuração do Firebase - substitua pelos seus dados
     const firebaseConfig = {
-      apiKey: "SUA_API_KEY",
-      authDomain: "SEU_PROJETO.firebaseapp.com",
-      databaseURL: "https://SEU_PROJETO.firebaseio.com",
-      projectId: "SEU_PROJETO",
-      storageBucket: "SEU_PROJETO.appspot.com",
-      messagingSenderId: "SENDER_ID",
-      appId: "APP_ID"
+      apiKey: "AIzaSyD7SE9XR48nqXKS_vvmk6c4cJ9ITJAumko",
+      authDomain: "riofly-aviation.firebaseapp.com",
+      projectId: "riofly-aviation",
+      storageBucket: "riofly-aviation.firebasestorage.app",
+      messagingSenderId: "162992793097",
+      appId: "1:162992793097:web:d4ee41e33dd948d0a0bad8",
+      databaseURL: "https://riofly-aviation-default-rtdb.firebaseio.com"
     };
 
-    // Inicializa o Firebase
-    const app = firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
 
     document.getElementById('diarioBordoForm').addEventListener('submit', function(e) {
       e.preventDefault();
@@ -151,7 +149,6 @@
       const receita = milhas * 100;
       const lucro = receita - custos;
 
-      // Dados do voo para salvar
       const voo = {
         comandante,
         vid,
@@ -166,16 +163,15 @@
         timestamp: Date.now()
       };
 
-      // Salvar no diário de bordo
-      database.ref('diario_bordo').push(voo)
+      const dbRef = ref(database);
+      push(ref(database, 'diario_bordo'), voo)
         .then(() => {
-          // Atualizar saldo no banco
-          return database.ref('banco/saldo').once('value');
+          return get(child(dbRef, 'banco/saldo'));
         })
         .then(snapshot => {
-          const saldoAtual = snapshot.val() || 5000000; // saldo inicial de 5 milhões se não tiver valor ainda
+          const saldoAtual = snapshot.exists() ? snapshot.val() : 5000000;
           const novoSaldo = saldoAtual + lucro;
-          return database.ref('banco').update({ saldo: novoSaldo });
+          return update(ref(database, 'banco'), { saldo: novoSaldo });
         })
         .then(() => {
           alert(
@@ -190,7 +186,6 @@
             `Lucro: R$ ${lucro.toLocaleString('pt-BR')}\n\n` +
             `Saldo bancário atualizado!`
           );
-          // Limpa formulário
           document.getElementById('diarioBordoForm').reset();
         })
         .catch(error => {
