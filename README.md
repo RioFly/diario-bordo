@@ -5,7 +5,6 @@
   <title>Diário de Bordo - RioFly Aviation</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet" />
   <style>
-    /* ... seu CSS permanece igual ... */
     * {
       margin: 0;
       padding: 0;
@@ -76,12 +75,28 @@
     th {
       background-color: #f4f4f4;
     }
+    .btn-apagar {
+      background-color: #cc3300;
+      border: none;
+      padding: 0.5rem 1rem;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .btn-apagar:hover {
+      background-color: #991f00;
+    }
     @media (max-width: 600px) {
       main {
         margin: 1rem;
         padding: 1rem;
       }
       table {
+        font-size: 0.85rem;
+      }
+      .btn-apagar {
+        padding: 0.3rem 0.6rem;
         font-size: 0.85rem;
       }
     }
@@ -146,6 +161,7 @@
           <th>Custos (R$)</th>
           <th>Lucro (R$)</th>
           <th>Observações</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody id="historicoTabela">
@@ -156,7 +172,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+    import { getDatabase, ref, push, onValue, remove, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyD7SE9XR48nqXKS_vvmk6c4cJ9ITJAumko",
@@ -171,6 +187,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const diarioRef = ref(db, "diario_bordo");
+    const saldoRef = ref(db, "banco/saldo");
 
     const form = document.getElementById("diarioBordoForm");
     const historicoTabela = document.getElementById("historicoTabela");
@@ -181,7 +198,6 @@
       historicoTabela.innerHTML = "";
       if (!voos) return;
 
-      // Só mostra se filtro preenchido (aeronave selecionada)
       if (!filtroAeronave) return;
 
       Object.entries(voos).forEach(([id, voo]) => {
@@ -198,8 +214,30 @@
           <td>R$ ${voo.custos.toLocaleString("pt-BR")}</td>
           <td>R$ ${voo.lucro.toLocaleString("pt-BR")}</td>
           <td>${voo.observacoes}</td>
+          <td><button class="btn-apagar" data-id="${id}">Apagar</button></td>
         `;
         historicoTabela.appendChild(tr);
+      });
+
+      document.querySelectorAll(".btn-apagar").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.target.getAttribute("data-id");
+          if (confirm("Tem certeza que deseja apagar este voo?")) {
+            // Apaga o voo e atualiza saldo subtraindo o lucro
+            remove(ref(db, `diario_bordo/${id}`))
+              .then(() => {
+                alert("Voo apagado com sucesso!");
+                // Atualizar saldo subtraindo o lucro do voo apagado
+                if (voosAtuais && voosAtuais[id]) {
+                  const lucroApagado = voosAtuais[id].lucro || 0;
+                  runTransaction(saldoRef, (currentSaldo) => {
+                    return (currentSaldo || 0) - lucroApagado;
+                  });
+                }
+              })
+              .catch(err => alert("Erro ao apagar voo: " + err.message));
+          }
+        });
       });
     }
 
@@ -249,6 +287,12 @@
       push(diarioRef, novoVoo)
         .then(() => {
           alert("Voo registrado com sucesso!");
+
+          // Atualizar saldo com o lucro do novo voo
+          runTransaction(saldoRef, (currentSaldo) => {
+            return (currentSaldo || 0) + lucro;
+          });
+
           form.reset();
         })
         .catch(err => alert("Erro ao registrar voo: " + err.message));
