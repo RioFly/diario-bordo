@@ -99,6 +99,13 @@
         font-size: 0.85rem;
       }
     }
+    /* Status de manutenção visível ao lado do filtro */
+    #statusManutencao {
+      margin-top: 1rem;
+      font-weight: 600;
+      color: #cc3300;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -132,11 +139,16 @@
         <option value="Pilatus PC-12 PR-CBJ">Pilatus PC-12 PR-CBJ</option>
       </select>
 
+      <div id="statusManutencao"></div>
+
       <label for="rota">Rota (Origem → Destino):</label>
       <input type="text" id="rota" placeholder="Ex: SBGL → SBSP" required />
 
       <label for="milhas">Distância (Milhas Náuticas):</label>
       <input type="number" id="milhas" required placeholder="Ex: 210" />
+
+      <label for="duracao">Duração (hh:mm):</label>
+      <input type="text" id="duracao" required placeholder="Ex: 1:30" pattern="^\\d{1,2}:\\d{2}$" title="Formato hh:mm, ex: 1:30" />
 
       <label for="custos">Taxas/Custos (R$):</label>
       <input type="number" id="custos" required placeholder="Ex: 3200" />
@@ -159,6 +171,7 @@
           <th>Receita (R$)</th>
           <th>Custos (R$)</th>
           <th>Lucro (R$)</th>
+          <th>Duração</th>
           <th>Observações</th>
           <th>Ações</th>
         </tr>
@@ -171,7 +184,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue, remove, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+    import { getDatabase, ref, push, onValue, remove, runTransaction, get, update } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyD7SE9XR48nqXKS_vvmk6c4cJ9ITJAumko",
@@ -187,19 +200,99 @@
     const db = getDatabase(app);
     const diarioRef = ref(db, "diario_bordo");
     const saldoRef = ref(db, "banco/saldo");
+    const manutencaoRef = ref(db, "manutencao_status");
 
     const form = document.getElementById("diarioBordoForm");
     const historicoTabela = document.getElementById("historicoTabela");
+    const statusManutencaoDiv = document.getElementById("statusManutencao");
 
     let voosAtuais = {};
+    let manutencaoStatus = {}; // objeto para status manutenção por aeronave
+
+    // Limite para manutenção: 75h em minutos
+    const LIMITE_MANUTENCAO_MINUTOS = 75 * 60;
+    const VALOR_MANUTENCAO = 20000; // R$ 20.000,00 desconto ao entrar em manutenção
+
+    // Função para formatar minutos em "Xh Ymin"
+    function formatarDuracao(minutos) {
+      const h = Math.floor(minutos / 60);
+      const m = minutos % 60;
+      return `${h}h ${m}min`;
+    }
+
+    // Função para atualizar o status da aeronave no campo visual
+    function atualizarStatusManutencaoVisual(aeronave) {
+      if (!aeronave) {
+        statusManutencaoDiv.textContent = "";
+        return;
+      }
+      const status = manutencaoStatus[aeronave]?.status || "operacional";
+      if (status === "manutencao") {
+        statusManutencaoDiv.textContent = `⚠️ ${aeronave} está EM MANUTENÇÃO - não é possível registrar voos até liberação.`;
+        statusManutencaoDiv.style.color = "#cc3300";
+      } else {
+        statusManutencaoDiv.textContent = "";
+      }
+    }
+
+    // Função para calcular horas acumuladas por aeronave e atualizar status
+    async function atualizarStatusManutencaoEFinanceiro(voos) {
+      // Objeto para somar duração total por aeronave
+      const duracaoPorAeronave = {};
+
+      if (!voos) return;
+
+      // Somar duração em minutos por aeronave
+      Object.values(voos).forEach(voo => {
+        if (!voo.aeronave) return;
+        duracaoPorAeronave[voo.aeronave] = (duracaoPorAeronave[voo.aeronave] || 0) + (voo.duracaoMinutos || 0);
+      });
+
+      // Para cada aeronave, verificar se ultrapassou limite e atualizar status no banco
+      for (const aeronave in duracaoPorAeronave) {
+        const duracaoTotal = duracaoPorAeronave[aeronave];
+
+        // Buscar status atual
+        const statusAtual = manutencaoStatus[aeronave]?.status || "operacional";
+
+        if (duracaoTotal >= LIMITE_MANUTENCAO_MINUTOS && statusAtual === "operacional") {
+          // Mudar para manutenção e descontar valor no saldo
+          manutencaoStatus[aeronave] = { status: "manutencao" };
+          await update(ref(db, `manutencao_status/${aeronave}`), { status: "manutencao" });
+
+          // Descontar valor do saldo (uma vez)
+          await runTransaction(saldoRef, currentSaldo => {
+            if (currentSaldo === null) return 0 - VALOR_MANUTENCAO;
+            return currentSaldo - VALOR_MANUTENCAO;
+          });
+
+          alert(`Aeronave ${aeronave} entrou em MANUTENÇÃO automática. R$ ${VALOR_MANUTENCAO.toLocaleString('pt-BR')} foram descontados do saldo.`);
+        } else if (duracaoTotal < LIMITE_MANUTENCAO_MINUTOS) {
+          // Se ficou abaixo do limite, volta para operacional (por segurança)
+          if (statusAtual === "manutencao") {
+            manutencaoStatus[aeronave] = { status: "operacional" };
+            await update(ref(db, `manutencao_status/${aeronave}`), { status: "operacional" });
+          }
+        }
+      }
+    }
 
     function renderizarHistorico(voos, filtroAeronave = "") {
       historicoTabela.innerHTML = "";
-      if (!voos) return;
-      if (!filtroAeronave) return;
+      if (!voos) {
+        historicoTabela.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:1rem;">Nenhum voo registrado.</td></tr>`;
+        return;
+      }
+
+      let duracaoTotalMinutos = 0;
+      let voosExibidos = 0;
 
       Object.entries(voos).forEach(([id, voo]) => {
-        if (voo.aeronave !== filtroAeronave) return;
+        if (filtroAeronave && voo.aeronave !== filtroAeronave) return;
+
+        voosExibidos++;
+
+        duracaoTotalMinutos += voo.duracaoMinutos || 0;
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -211,11 +304,25 @@
           <td>R$ ${voo.receita.toLocaleString("pt-BR")}</td>
           <td>R$ ${voo.custos.toLocaleString("pt-BR")}</td>
           <td>R$ ${voo.lucro.toLocaleString("pt-BR")}</td>
+          <td>${voo.duracaoStr || ''}</td>
           <td>${voo.observacoes}</td>
           <td><button class="btn-apagar" data-id="${id}">Apagar</button></td>
         `;
         historicoTabela.appendChild(tr);
       });
+
+      if (voosExibidos === 0) {
+        historicoTabela.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:1rem;">Nenhum voo registrado.</td></tr>`;
+      } else {
+        // Linha resumo duração total
+        const trResumo = document.createElement("tr");
+        trResumo.style.fontWeight = "600";
+        trResumo.innerHTML = `
+          <td colspan="8" style="text-align:right;">Duração Total Exibida:</td>
+          <td colspan="3">${formatarDuracao(duracaoTotalMinutos)}</td>
+        `;
+        historicoTabela.appendChild(trResumo);
+      }
 
       document.querySelectorAll(".btn-apagar").forEach(btn => {
         btn.addEventListener("click", (e) => {
@@ -237,16 +344,34 @@
       });
     }
 
-    onValue(diarioRef, (snapshot) => {
-      voosAtuais = snapshot.val();
-      renderizarHistorico(voosAtuais, form.aeronave.value);
+    onValue(diarioRef, async (snapshot) => {
+      voosAtuais = snapshot.val() || {};
+
+      // Atualizar status manutenção da aeronave selecionada no filtro
+      const aeronaveSelecionada = form.aeronave.value;
+
+      // Atualizar status manutenção e financeiro (await porque atualiza no Firebase)
+      await atualizarStatusManutencaoEFinanceiro(voosAtuais);
+
+      // Buscar status atualizado do banco para usar localmente
+      const manutencaoSnap = await get(manutencaoRef);
+      manutencaoStatus = manutencaoSnap.val() || {};
+
+      // Atualizar o status visível no formulário
+      atualizarStatusManutencaoVisual(aeronaveSelecionada);
+
+      // Renderizar histórico com filtro atual
+      renderizarHistorico(voosAtuais, aeronaveSelecionada);
     });
 
     form.aeronave.addEventListener("change", () => {
+      // Atualizar status visível ao trocar aeronave
+      atualizarStatusManutencaoVisual(form.aeronave.value);
+      // Re-renderizar histórico
       renderizarHistorico(voosAtuais, form.aeronave.value);
     });
 
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
 
       const comandante = form.comandante.value.trim();
@@ -257,9 +382,28 @@
       const milhas = parseFloat(form.milhas.value);
       const custos = parseFloat(form.custos.value);
       const observacoes = form.observacoes.value.trim();
+      const duracaoStr = form.duracao.value.trim();
+
+      // Validar duração no formato hh:mm
+      const duracaoParts = duracaoStr.split(':');
+      if (duracaoParts.length !== 2) {
+        alert("Duração deve estar no formato hh:mm");
+        return;
+      }
+      const duracaoMinutos = parseInt(duracaoParts[0]) * 60 + parseInt(duracaoParts[1]);
+      if (isNaN(duracaoMinutos) || duracaoMinutos <= 0) {
+        alert("Duração inválida");
+        return;
+      }
 
       if (!comandante || !vid || !data || !aeronave || !rota || isNaN(milhas) || isNaN(custos)) {
         alert("Preencha todos os campos corretamente.");
+        return;
+      }
+
+      // Verificar se a aeronave está em manutenção
+      if (manutencaoStatus[aeronave]?.status === "manutencao") {
+        alert(`A aeronave ${aeronave} está em MANUTENÇÃO e não pode registrar novos voos.`);
         return;
       }
 
@@ -276,19 +420,23 @@
         custos,
         receita,
         lucro,
+        duracaoMinutos,
+        duracaoStr,
         observacoes,
         timestamp: Date.now()
       };
 
-      push(diarioRef, novoVoo)
-        .then(() => {
-          alert("Voo registrado com sucesso!");
-          runTransaction(saldoRef, (currentSaldo) => {
-            return (currentSaldo || 0) + lucro;
-          });
-          form.reset();
-        })
-        .catch(err => alert("Erro ao registrar voo: " + err.message));
+      try {
+        await push(diarioRef, novoVoo);
+        alert("Voo registrado com sucesso!");
+        await runTransaction(saldoRef, (currentSaldo) => {
+          return (currentSaldo || 0) + lucro;
+        });
+        form.reset();
+        atualizarStatusManutencaoVisual(""); // limpa status
+      } catch (err) {
+        alert("Erro ao registrar voo: " + err.message);
+      }
     });
   </script>
 </body>
