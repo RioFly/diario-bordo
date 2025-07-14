@@ -149,7 +149,6 @@
       <label for="duracao">Duração (ex: 1h 30min, 45min, 2h):</label>
       <input type="text" id="duracao" required placeholder="Ex: 1h 30min" />
 
-
         pattern="^(\d+h)?\s?(\d+min)?$" 
         title="Formato: '1h 30min', '45min' ou '2h'" />
 
