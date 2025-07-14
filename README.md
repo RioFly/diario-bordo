@@ -61,7 +61,6 @@
     button:hover {
       background-color: #004c99;
     }
-    /* Estilo para tabela de histórico */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -123,14 +122,14 @@
       <label for="aeronave">Aeronave:</label>
       <select id="aeronave" required>
         <option value="">-- Selecione uma aeronave --</option>
-        <option value="Phenom 300">Phenom 300</option>
-        <option value="Phenom 100">Phenom 100</option>
-        <option value="Citation CJ3">Citation CJ3</option>
-        <option value="King Air B200">King Air B200</option>
-        <option value="Bell 407">Bell 407</option>
-        <option value="Agusta AW109SP">Agusta AW109SP</option>
-        <option value="Robinson R66">Robinson R66</option>
-        <option value="H125">H125</option>
+        <option value="R66 PS-JRF">R66 PS-JRF</option>
+        <option value="R66 PP-JMB">R66 PP-JMB</option>
+        <option value="H130 PP-RIO">H130 PP-RIO</option>
+        <option value="H130 PP-ADR">H130 PP-ADR</option>
+        <option value="Phenom 100 PS-EMB">Phenom 100 PS-EMB</option>
+        <option value="Phenom 300 (Em Regularização)">Phenom 300 (Em Regularização)</option>
+        <option value="Citation CJ3 PS-SCC">Citation CJ3 PS-SCC</option>
+        <option value="Pilatus PC-12 PR-CBJ">Pilatus PC-12 PR-CBJ</option>
       </select>
 
       <label for="rota">Rota (Origem → Destino):</label>
@@ -197,7 +196,6 @@
     function renderizarHistorico(voos, filtroAeronave = "") {
       historicoTabela.innerHTML = "";
       if (!voos) return;
-
       if (!filtroAeronave) return;
 
       Object.entries(voos).forEach(([id, voo]) => {
@@ -223,11 +221,9 @@
         btn.addEventListener("click", (e) => {
           const id = e.target.getAttribute("data-id");
           if (confirm("Tem certeza que deseja apagar este voo?")) {
-            // Apaga o voo e atualiza saldo subtraindo o lucro
             remove(ref(db, `diario_bordo/${id}`))
               .then(() => {
                 alert("Voo apagado com sucesso!");
-                // Atualizar saldo subtraindo o lucro do voo apagado
                 if (voosAtuais && voosAtuais[id]) {
                   const lucroApagado = voosAtuais[id].lucro || 0;
                   runTransaction(saldoRef, (currentSaldo) => {
@@ -287,12 +283,9 @@
       push(diarioRef, novoVoo)
         .then(() => {
           alert("Voo registrado com sucesso!");
-
-          // Atualizar saldo com o lucro do novo voo
           runTransaction(saldoRef, (currentSaldo) => {
             return (currentSaldo || 0) + lucro;
           });
-
           form.reset();
         })
         .catch(err => alert("Erro ao registrar voo: " + err.message));
