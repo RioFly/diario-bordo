@@ -99,7 +99,6 @@
         font-size: 0.85rem;
       }
     }
-    /* Status de manutenção visível ao lado do filtro */
     #statusManutencao {
       margin-top: 1rem;
       font-weight: 600;
@@ -147,8 +146,10 @@
       <label for="milhas">Distância (Milhas Náuticas):</label>
       <input type="number" id="milhas" required placeholder="Ex: 210" />
 
-      <label for="duracao">Duração (hh:mm):</label>
-      <input type="text" id="duracao" required placeholder="Ex: 1:30" pattern="^\\d{1,2}:\\d{2}$" title="Formato hh:mm, ex: 1:30" />
+      <label for="duracao">Duração (ex: 1h 30min, 45min, 2h):</label>
+      <input type="text" id="duracao" required placeholder="Ex: 1h 30min" 
+        pattern="^(\d+h)?\s?(\d+min)?$" 
+        title="Formato: '1h 30min', '45min' ou '2h'" />
 
       <label for="custos">Taxas/Custos (R$):</label>
       <input type="number" id="custos" required placeholder="Ex: 3200" />
@@ -217,10 +218,32 @@
     function formatarDuracao(minutos) {
       const h = Math.floor(minutos / 60);
       const m = minutos % 60;
-      return `${h}h ${m}min`;
+      let result = "";
+      if (h > 0) result += `${h}h`;
+      if (m > 0) result += (h > 0 ? " " : "") + `${m}min`;
+      if (result === "") result = "0min";
+      return result;
     }
 
-    // Função para atualizar o status da aeronave no campo visual
+    // Função para converter string "1h 30min" em minutos
+    function parseDuracao(texto) {
+      texto = texto.toLowerCase().trim();
+      let horas = 0;
+      let minutos = 0;
+
+      // Regex para encontrar partes de horas e minutos
+      const regexHora = /(\d+)\s*h/;
+      const regexMinuto = /(\d+)\s*min/;
+
+      const matchHora = texto.match(regexHora);
+      const matchMinuto = texto.match(regexMinuto);
+
+      if (matchHora) horas = parseInt(matchHora[1]);
+      if (matchMinuto) minutos = parseInt(matchMinuto[1]);
+
+      return horas * 60 + minutos;
+    }
+
     function atualizarStatusManutencaoVisual(aeronave) {
       if (!aeronave) {
         statusManutencaoDiv.textContent = "";
@@ -235,32 +258,23 @@
       }
     }
 
-    // Função para calcular horas acumuladas por aeronave e atualizar status
     async function atualizarStatusManutencaoEFinanceiro(voos) {
-      // Objeto para somar duração total por aeronave
       const duracaoPorAeronave = {};
-
       if (!voos) return;
 
-      // Somar duração em minutos por aeronave
       Object.values(voos).forEach(voo => {
         if (!voo.aeronave) return;
         duracaoPorAeronave[voo.aeronave] = (duracaoPorAeronave[voo.aeronave] || 0) + (voo.duracaoMinutos || 0);
       });
 
-      // Para cada aeronave, verificar se ultrapassou limite e atualizar status no banco
       for (const aeronave in duracaoPorAeronave) {
         const duracaoTotal = duracaoPorAeronave[aeronave];
-
-        // Buscar status atual
         const statusAtual = manutencaoStatus[aeronave]?.status || "operacional";
 
         if (duracaoTotal >= LIMITE_MANUTENCAO_MINUTOS && statusAtual === "operacional") {
-          // Mudar para manutenção e descontar valor no saldo
           manutencaoStatus[aeronave] = { status: "manutencao" };
           await update(ref(db, `manutencao_status/${aeronave}`), { status: "manutencao" });
 
-          // Descontar valor do saldo (uma vez)
           await runTransaction(saldoRef, currentSaldo => {
             if (currentSaldo === null) return 0 - VALOR_MANUTENCAO;
             return currentSaldo - VALOR_MANUTENCAO;
@@ -268,7 +282,6 @@
 
           alert(`Aeronave ${aeronave} entrou em MANUTENÇÃO automática. R$ ${VALOR_MANUTENCAO.toLocaleString('pt-BR')} foram descontados do saldo.`);
         } else if (duracaoTotal < LIMITE_MANUTENCAO_MINUTOS) {
-          // Se ficou abaixo do limite, volta para operacional (por segurança)
           if (statusAtual === "manutencao") {
             manutencaoStatus[aeronave] = { status: "operacional" };
             await update(ref(db, `manutencao_status/${aeronave}`), { status: "operacional" });
@@ -314,7 +327,6 @@
       if (voosExibidos === 0) {
         historicoTabela.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:1rem;">Nenhum voo registrado.</td></tr>`;
       } else {
-        // Linha resumo duração total
         const trResumo = document.createElement("tr");
         trResumo.style.fontWeight = "600";
         trResumo.innerHTML = `
@@ -347,27 +359,20 @@
     onValue(diarioRef, async (snapshot) => {
       voosAtuais = snapshot.val() || {};
 
-      // Atualizar status manutenção da aeronave selecionada no filtro
       const aeronaveSelecionada = form.aeronave.value;
 
-      // Atualizar status manutenção e financeiro (await porque atualiza no Firebase)
       await atualizarStatusManutencaoEFinanceiro(voosAtuais);
 
-      // Buscar status atualizado do banco para usar localmente
       const manutencaoSnap = await get(manutencaoRef);
       manutencaoStatus = manutencaoSnap.val() || {};
 
-      // Atualizar o status visível no formulário
       atualizarStatusManutencaoVisual(aeronaveSelecionada);
 
-      // Renderizar histórico com filtro atual
       renderizarHistorico(voosAtuais, aeronaveSelecionada);
     });
 
     form.aeronave.addEventListener("change", () => {
-      // Atualizar status visível ao trocar aeronave
       atualizarStatusManutencaoVisual(form.aeronave.value);
-      // Re-renderizar histórico
       renderizarHistorico(voosAtuais, form.aeronave.value);
     });
 
@@ -382,17 +387,12 @@
       const milhas = parseFloat(form.milhas.value);
       const custos = parseFloat(form.custos.value);
       const observacoes = form.observacoes.value.trim();
-      const duracaoStr = form.duracao.value.trim();
+      const duracaoTexto = form.duracao.value.trim();
 
-      // Validar duração no formato hh:mm
-      const duracaoParts = duracaoStr.split(':');
-      if (duracaoParts.length !== 2) {
-        alert("Duração deve estar no formato hh:mm");
-        return;
-      }
-      const duracaoMinutos = parseInt(duracaoParts[0]) * 60 + parseInt(duracaoParts[1]);
-      if (isNaN(duracaoMinutos) || duracaoMinutos <= 0) {
-        alert("Duração inválida");
+      // Converter duração texto para minutos
+      const duracaoMinutos = parseDuracao(duracaoTexto);
+      if (duracaoMinutos <= 0) {
+        alert("Duração inválida. Use formato como '1h 30min', '45min' ou '2h'.");
         return;
       }
 
@@ -401,7 +401,6 @@
         return;
       }
 
-      // Verificar se a aeronave está em manutenção
       if (manutencaoStatus[aeronave]?.status === "manutencao") {
         alert(`A aeronave ${aeronave} está em MANUTENÇÃO e não pode registrar novos voos.`);
         return;
@@ -421,7 +420,7 @@
         receita,
         lucro,
         duracaoMinutos,
-        duracaoStr,
+        duracaoStr: duracaoTexto,
         observacoes,
         timestamp: Date.now()
       };
