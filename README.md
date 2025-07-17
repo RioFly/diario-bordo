@@ -133,9 +133,9 @@
         <option value="H130 PP-RIO">H130 PP-RIO</option>
         <option value="H130 PP-ADR">H130 PP-ADR</option>
         <option value="Phenom 100 PS-EMB">Phenom 100 PS-EMB</option>
-        <option value="Phenom 300 (Em Regularização)">Phenom 300 (Em Regularização)</option>
+        <option value="Phenom 300 PR-FLA">Phenom 300 PR-FLA</option>
         <option value="Citation CJ3 PS-SCC">Citation CJ3 PS-SCC</option>
-        <option value="Pilatus PC-12 PR-CBJ">Pilatus PC-12 PR-CBJ</option>
+        <option value="Pilatus PC-12 PS-STQ">Pilatus PC-12 PS-STQ</option>
       </select>
 
       <div id="statusManutencao"></div>
