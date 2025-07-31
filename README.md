@@ -133,9 +133,9 @@
         <option value="H130 PP-ADR">H130 PP-ADR</option>
         <option value="Phenom 100 PP-EMB">Phenom 100 PP-EMB</option>
         <option value="Phenom 300 PR-FLA">Phenom 300 PR-FLA</option>
+        <option value="Citation CJ3 PS-SCC">Citation CJ3 PS-SCC</option>
         <option value="F90 King Air PP-JCA">F90 King Air PP-JCA</option>
         <option value="Pilatus PC-12 PS-STQ">Pilatus PC-12 PS-STQ</option>
-        <option value="Citation CJ3 PS-SCC">Citation CJ3 PS-SCC</option>
         <option value="B99 Airliner PT-FSC">B99 Airliner PT-FSC</option>
       </select>
 
